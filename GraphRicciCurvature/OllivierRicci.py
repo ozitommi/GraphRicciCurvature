@@ -674,6 +674,9 @@ class OllivierRicci:
                 - "ERROR": only show log if error happened.
 
         """
+        
+        print("Hello world! This is Tommi")
+        
         self.G = G.copy()
         self.alpha = alpha
         self.weight = weight
