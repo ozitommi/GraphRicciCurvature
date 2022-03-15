@@ -675,7 +675,7 @@ class OllivierRicci:
 
         """
         
-        print("Hello world! This is Tommi")
+        print("Hello world! This is Tommi 1")
         
         self.G = G.copy()
         self.alpha = alpha
