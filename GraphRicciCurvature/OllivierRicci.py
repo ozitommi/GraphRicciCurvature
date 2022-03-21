@@ -510,12 +510,12 @@ def _compute_ricci_curvature(G: nx.Graph, weight="weight", **kwargs):
         A NetworkX graph with "ricciCurvature" on nodes and edges.
     """
 
-    G_distance_dict = {(e1, e2): weight for e1, e2, weight in G.edges(data='weight')}
-    nx.set_edge_attributes(G, G_distance_dict, 'distance')
+    # G_distance_dict = {(e1, e2): weight for e1, e2, weight in G.edges(data='weight')}
+    # nx.set_edge_attributes(G, G_distance_dict, "distance")
 
-    centrality = nx.eigenvector_centrality(G,weight="weight")
+    # centrality = nx.eigenvector_centrality(G,weight="weight")
     # centrality = nx.closeness_centrality(G,dist="distance")
-    # centrality = nx.betweenness_centrality(G,weight="weight")
+    centrality = nx.betweenness_centrality(G,weight="weight")
 
     # compute Ricci curvature for all edges
     edge_ricci = _compute_ricci_curvature_edges(G, centrality=centrality, weight=weight, **kwargs)
@@ -691,6 +691,8 @@ class OllivierRicci:
                 - "ERROR": only show log if error happened.
 
         """
+
+        print("Hello! This is Tommi")
         
         self.G = G.copy()
         self.alpha = alpha
@@ -910,5 +912,4 @@ class OllivierRicci:
             cc.append((cut, {c: idx for idx, comp in enumerate(nx.connected_components(Gp)) for c in comp}))
 
         return cc
-    
-    
+
