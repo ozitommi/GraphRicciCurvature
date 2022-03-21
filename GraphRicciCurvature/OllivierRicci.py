@@ -27,6 +27,8 @@ from functools import lru_cache
 
 import networkit as nk
 import networkx as nx
+from networkx.algorithms.centrality.closeness import closeness_centrality
+from networkx.algorithms.centrality.eigenvector import eigenvector_centrality
 import numpy as np
 import ot
 
@@ -79,34 +81,40 @@ def _get_single_node_neighbors_distributions(node, direction="successors"):
         neighbors = list(_Gk.iterNeighbors(node))
 
     # Get sum of distributions from x's all neighbors
-    heap_weight_node_pair = []
-    for nbr in neighbors:
-        if direction == "predecessors":
-            w = _base ** (-_Gk.weight(nbr, node) ** _exp_power)
-        else:  # successors
-            w = _base ** (-_Gk.weight(node, nbr) ** _exp_power)
 
-        if len(heap_weight_node_pair) < _nbr_topk:
-            heapq.heappush(heap_weight_node_pair, (w, nbr))
-        else:
-            heapq.heappushpop(heap_weight_node_pair, (w, nbr))
+    distributions = [_centrality[x] for x in neighbors] + [_centrality[node]]
+    distributions = [float(i)/sum(distributions) for i in distributions]
 
-    nbr_edge_weight_sum = sum([x[0] for x in heap_weight_node_pair])
+    # heap_weight_node_pair = []
+    # for nbr in neighbors:
+    #     if direction == "predecessors":
+    #         w = _base ** (-_Gk.weight(nbr, node) ** _exp_power)
+    #     else:  # successors
+    #         w = _base ** (-_Gk.weight(node, nbr) ** _exp_power)
 
-    if not neighbors:
-        # No neighbor, all mass stay at node
-        return [1], [node]
+    #     if len(heap_weight_node_pair) < _nbr_topk:
+    #         heapq.heappush(heap_weight_node_pair, (w, nbr))
+    #     else:
+    #         heapq.heappushpop(heap_weight_node_pair, (w, nbr))
 
-    if nbr_edge_weight_sum > EPSILON:
-        # Sum need to be not too small to prevent divided by zero
-        distributions = [(1.0 - _alpha) * w / nbr_edge_weight_sum for w, _ in heap_weight_node_pair]
-    else:
-        # Sum too small, just evenly distribute to every neighbors
-        logger.warning("Neighbor weight sum too small, list:", heap_weight_node_pair)
-        distributions = [(1.0 - _alpha) / len(heap_weight_node_pair)] * len(heap_weight_node_pair)
+    # nbr_edge_weight_sum = sum([x[0] for x in heap_weight_node_pair])
 
-    nbr = [x[1] for x in heap_weight_node_pair]
-    return distributions + [_alpha], nbr + [node]
+    # if not neighbors:
+    #     # No neighbor, all mass stay at node
+    #     return [1], [node]
+
+    # if nbr_edge_weight_sum > EPSILON:
+    #     # Sum need to be not too small to prevent divided by zero
+    #     distributions = [(1.0 - _alpha) * w / nbr_edge_weight_sum for w, _ in heap_weight_node_pair]
+    # else:
+    #     # Sum too small, just evenly distribute to every neighbors
+    #     logger.warning("Neighbor weight sum too small, list:", heap_weight_node_pair)
+    #     distributions = [(1.0 - _alpha) / len(heap_weight_node_pair)] * len(heap_weight_node_pair)
+
+    # nbr = [x[1] for x in heap_weight_node_pair]
+    # return distributions + [_alpha], nbr + [node]
+
+    return distributions, neighbors + [node]
 
 
 def _distribute_densities(source, target):
@@ -352,7 +360,7 @@ def _wrap_compute_single_edge(stuff):
     return _compute_ricci_curvature_single_edge(*stuff)
 
 
-def _compute_ricci_curvature_edges(G: nx.Graph, weight="weight", edge_list=[],
+def _compute_ricci_curvature_edges(G: nx.Graph, centrality, weight="weight", edge_list=[],
                                    alpha=0.5, method="OTDSinkhornMix",
                                    base=math.e, exp_power=2, proc=mp.cpu_count(), chunksize=None, cache_maxsize=1000000,
                                    shortest_path="all_pairs", nbr_topk=3000):
@@ -414,6 +422,7 @@ def _compute_ricci_curvature_edges(G: nx.Graph, weight="weight", edge_list=[],
 
     # ---set to global variable for multiprocessing used.---
     global _Gk
+    global _centrality
     global _alpha
     global _weight
     global _method
@@ -427,6 +436,7 @@ def _compute_ricci_curvature_edges(G: nx.Graph, weight="weight", edge_list=[],
     # -------------------------------------------------------
 
     _Gk = nk.nxadapter.nx2nk(G, weightAttr=weight)
+    _centrality = centrality
     _alpha = alpha
     _weight = weight
     _method = method
@@ -500,8 +510,15 @@ def _compute_ricci_curvature(G: nx.Graph, weight="weight", **kwargs):
         A NetworkX graph with "ricciCurvature" on nodes and edges.
     """
 
+    G_distance_dict = {(e1, e2): weight for e1, e2, weight in G.edges(data='weight')}
+    nx.set_edge_attributes(G, G_distance_dict, 'distance')
+
+    centrality = nx.eigenvector_centrality(G,weight="weight")
+    # centrality = nx.closeness_centrality(G,dist="distance")
+    # centrality = nx.betweenness_centrality(G,weight="weight")
+
     # compute Ricci curvature for all edges
-    edge_ricci = _compute_ricci_curvature_edges(G, weight=weight, **kwargs)
+    edge_ricci = _compute_ricci_curvature_edges(G, centrality=centrality, weight=weight, **kwargs)
 
     # Assign edge Ricci curvature from result to graph G
     nx.set_edge_attributes(G, edge_ricci, "ricciCurvature")
@@ -893,4 +910,5 @@ class OllivierRicci:
             cc.append((cut, {c: idx for idx, comp in enumerate(nx.connected_components(Gp)) for c in comp}))
 
         return cc
-
+    
+    
